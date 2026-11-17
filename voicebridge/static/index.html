@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>VoiceBridge</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1d2330;
+    --muted: #5d6676;
+    --line: #dfe3ea;
+    --brand: #2f5bd3;
+    --brand-text: #ffffff;
+    --stop: #c2352b;
+    --ok: #1d7a46;
+    --warn-bg: #fff4d6;
+    --warn-text: #6b4b00;
+    --err: #b3261e;
+    --chip: #eef1f7;
+    accent-color: var(--brand);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121418;
+      --card: #1b1e24;
+      --text: #e6e8ec;
+      --muted: #9aa3b2;
+      --line: #2d323b;
+      --brand: #7ea2ff;
+      --brand-text: #0d1424;
+      --stop: #ff8a80;
+      --ok: #6fd39b;
+      --warn-bg: #3a2f12;
+      --warn-text: #f3d48a;
+      --err: #ff8a80;
+      --chip: #262a32;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Gujarati", sans-serif;
+  }
+  main { max-width: 1120px; margin: 0 auto; padding: 20px 16px 40px; }
+  header h1 { margin: 0; font-size: 1.5rem; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  .banner { margin: 14px 0 0; padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-text); }
+  .banner.ok { background: var(--chip); color: var(--text); }
+  .banner a { color: inherit; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; margin-top: 16px; }
+  section.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  section.card h2 { margin: 0; font-size: 1.1rem; }
+  section.card > p { margin: 2px 0 12px; color: var(--muted); font-size: .9rem; }
+  .row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: end; }
+  .row .arrow { padding-bottom: 8px; color: var(--muted); }
+  label { display: block; font-size: .82rem; color: var(--muted); margin: 10px 0 4px; }
+  select, input[type=text], textarea {
+    width: 100%; font: inherit; color: inherit; background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px;
+  }
+  textarea { min-height: 64px; resize: vertical; }
+  .check { display: flex; gap: 8px; align-items: center; margin: 12px 0 0; color: var(--text); font-size: .9rem; }
+  .check input { margin: 0; }
+  .hint { color: var(--muted); font-size: .8rem; margin: 4px 0 0; }
+  .controls { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-weight: 600; border: 0; border-radius: 999px; padding: 9px 20px; cursor: pointer;
+    background: var(--brand); color: var(--brand-text);
+  }
+  button.stop { background: var(--stop); color: var(--brand-text); }
+  button:disabled { opacity: .5; cursor: progress; }
+  meter { width: 120px; height: 10px; }
+  .state { font-size: .85rem; color: var(--muted); }
+  .state.listening { color: var(--ok); font-weight: 600; }
+  .state.error { color: var(--err); font-weight: 600; }
+  input[type=range] { width: 100%; }
+  #log { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow-y: auto; }
+  #log li { padding: 9px 2px; border-bottom: 1px solid var(--line); }
+  #log li:last-child { border-bottom: 0; }
+  #log .meta { font-size: .75rem; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  #log .tag { background: var(--chip); border-radius: 999px; padding: 0 8px; font-weight: 600; color: var(--text); }
+  #log .main { font-size: 1.05rem; margin-top: 2px; }
+  #log .orig { color: var(--muted); font-size: .88rem; }
+  #log li.error .main { color: var(--err); font-size: .9rem; }
+  #log li.status .main { color: var(--muted); font-size: .88rem; }
+  .log-head { display: flex; justify-content: space-between; align-items: center; }
+  .log-head button { background: var(--chip); color: var(--text); padding: 5px 14px; font-weight: 500; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }
+  .wide { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>VoiceBridge</h1>
+    <p>Live speech translation for Teams, Zoom, Google Meet, or any app with a microphone setting.</p>
+    <p id="cable" class="banner" hidden></p>
+  </header>
+
+  <div class="grid">
+    <section class="card" id="speak" aria-labelledby="speak-title">
+      <h2 id="speak-title">Speak: others hear you translated</h2>
+      <p>You talk in your language; the meeting hears a natural voice in theirs.</p>
+      <div class="row">
+        <div><label for="speak-source">I speak</label><select id="speak-source" data-lang></select></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div><label for="speak-target">They hear</label><select id="speak-target" data-lang></select></div>
+      </div>
+      <label for="speak-voice">Voice</label>
+      <select id="speak-voice"><option value="female">Female</option><option value="male">Male</option></select>
+      <label for="speak-input">Microphone</label>
+      <select id="speak-input" data-mics></select>
+      <label for="speak-output">Send translated voice to</label>
+      <select id="speak-output" data-speakers></select>
+      <p class="hint">Pick <b>CABLE Input</b> here, then choose <b>CABLE Output</b> as the microphone in Teams / Zoom / Meet.</p>
+      <label class="check"><input type="checkbox" id="speak-monitor"> Also play the translation to me on</label>
+      <select id="speak-monitor-device" data-speakers aria-label="Monitor device"></select>
+      <label for="speak-sens">Mic sensitivity</label>
+      <input type="range" id="speak-sens" min="0.4" max="3" step="0.1" value="1">
+      <div class="controls">
+        <button type="button" data-start="speak">Start</button>
+        <meter id="speak-level" min="0" max="1" low="0.25" high="0.9" optimum="0.6" value="0" aria-label="Microphone level"></meter>
+        <span class="state" id="speak-state">Stopped</span>
+      </div>
+    </section>
+
+    <section class="card" id="listen" aria-labelledby="listen-title">
+      <h2 id="listen-title">Listen: hear the meeting in your language</h2>
+      <p>Translates what your speakers play: live captions, and optionally a voice.</p>
+      <div class="row">
+        <div><label for="listen-source">They speak</label><select id="listen-source" data-lang data-auto></select></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div><label for="listen-target">I want</label><select id="listen-target" data-lang></select></div>
+      </div>
+      <label for="listen-input">Capture audio playing on</label>
+      <select id="listen-input" data-speakers></select>
+      <p class="hint">Choose the speakers or headset your meeting app plays through.</p>
+      <label class="check"><input type="checkbox" id="listen-speak"> Read translations aloud</label>
+      <div class="row">
+        <div><label for="listen-output">Play on</label><select id="listen-output" data-speakers></select></div>
+        <span></span>
+        <div><label for="listen-voice">Voice</label>
+          <select id="listen-voice"><option value="female">Female</option><option value="male">Male</option></select></div>
+      </div>
+      <p class="hint">While a translation plays on the captured device, capture pauses so VoiceBridge doesn't translate itself.</p>
+      <div class="controls">
+        <button type="button" data-start="listen">Start</button>
+        <meter id="listen-level" min="0" max="1" low="0.25" high="0.9" optimum="0.6" value="0" aria-label="Meeting audio level"></meter>
+        <span class="state" id="listen-state">Stopped</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section class="card" aria-labelledby="log-title" style="grid-column: 1 / -1">
+      <div class="log-head">
+        <h2 id="log-title">Live transcript</h2>
+        <button type="button" id="clear-log">Clear</button>
+      </div>
+      <ul id="log" role="log" aria-live="polite"></ul>
+    </section>
+
+    <section class="card" aria-labelledby="test-title">
+      <h2 id="test-title">Quick test (no microphone)</h2>
+      <p>Type a sentence to hear it translated.</p>
+      <label for="test-text">Text</label>
+      <textarea id="test-text">Hello everyone, I will share my screen in a minute.</textarea>
+      <div class="row">
+        <div><label for="test-source">From</label><select id="test-source" data-lang></select></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div><label for="test-target">To</label><select id="test-target" data-lang></select></div>
+      </div>
+      <label for="test-output">Play on</label>
+      <select id="test-output" data-speakers></select>
+      <div class="controls"><button type="button" id="test-go">Translate &amp; speak</button></div>
+    </section>
+
+    <section class="card" aria-labelledby="settings-title">
+      <h2 id="settings-title">Engines</h2>
+      <p>Applied the next time you press Start.</p>
+      <div class="settings">
+        <div><label for="set-stt">Speech recognition</label>
+          <select id="set-stt">
+            <option value="auto">Auto (Whisper, else Google)</option>
+            <option value="whisper">Whisper (local, private)</option>
+            <option value="google">Google (online)</option>
+          </select></div>
+        <div><label for="set-model">Whisper model</label>
+          <select id="set-model">
+            <option value="base">base (fastest)</option>
+            <option value="small">small (balanced)</option>
+            <option value="medium">medium (best for Indian languages)</option>
+            <option value="large-v3">large-v3 (needs a GPU)</option>
+          </select></div>
+        <div class="wide"><label for="set-translator">Translator</label>
+          <select id="set-translator">
+            <option value="auto">Auto (Azure if key set → Google → MyMemory)</option>
+            <option value="google">Google (free)</option>
+            <option value="mymemory">MyMemory (free, daily limit)</option>
+            <option value="azure">Azure (your key)</option>
+          </select></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem("vb:" + k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem("vb:" + k, v); } catch { /* private mode */ } },
+};
+const DEFAULTS = {
+  "speak-source": "en", "speak-target": "gu", "listen-source": "gu", "listen-target": "en",
+  "test-source": "en", "test-target": "gu", "set-stt": "auto", "set-model": "small", "set-translator": "auto",
+};
+let config = null;
+let lastEvent = 0;
+const states = { speak: "stopped", listen: "stopped" };
+
+async function api(path, body) {
+  const opts = body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  };
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function fill(select, items, autoOption) {
+  select.replaceChildren();
+  if (autoOption) select.append(new Option(autoOption.label, autoOption.value));
+  for (const it of items) select.append(new Option(it.name, it.id ?? it.code));
+}
+
+function restore(select, fallback) {
+  const saved = store.get(select.id);
+  const want = saved ?? fallback;
+  if (want != null && [...select.options].some((o) => o.value === want)) select.value = want;
+}
+
+function setup() {
+  const cable = config.virtual_cable;
+  const banner = $("cable");
+  banner.hidden = false;
+  if (cable) {
+    banner.className = "banner ok";
+    banner.textContent = `Virtual cable found: “${cable.name}”. In your meeting app, set the microphone to the matching “Output” device.`;
+  } else {
+    banner.className = "banner";
+    banner.innerHTML = 'No virtual audio cable found. Install the free <a href="https://vb-audio.com/Cable/" target="_blank" rel="noopener">VB-CABLE</a> driver so Teams/Zoom can hear the translated voice. Until then you can test by sending the voice to your speakers.';
+  }
+  for (const s of document.querySelectorAll("select[data-lang]")) {
+    fill(s, config.languages, s.hasAttribute("data-auto") ? { value: "auto", label: "Auto-detect (Whisper)" } : null);
+  }
+  for (const s of document.querySelectorAll("select[data-mics]")) {
+    fill(s, config.microphones, { value: "", label: `Default (${config.default_microphone?.name ?? "system"})` });
+  }
+  for (const s of document.querySelectorAll("select[data-speakers]")) {
+    fill(s, config.speakers, { value: "", label: `Default (${config.default_speaker?.name ?? "system"})` });
+  }
+  for (const s of document.querySelectorAll("select")) {
+    let fallback = DEFAULTS[s.id];
+    if (s.id === "speak-output" && cable) fallback = cable.id;
+    if (s.id === "listen-input" || s.id === "listen-output") fallback = "";
+    if (s.id === "set-stt") fallback = config.engines.stt;
+    if (s.id === "set-model") fallback = config.engines.model;
+    if (s.id === "set-translator") fallback = config.engines.translator;
+    restore(s, fallback);
+    s.addEventListener("change", () => store.set(s.id, s.value));
+  }
+  for (const id of ["speak-monitor", "listen-speak"]) {
+    const box = $(id);
+    box.checked = store.get(id) === "1";
+    box.addEventListener("change", () => store.set(id, box.checked ? "1" : "0"));
+  }
+  const sens = $("speak-sens");
+  sens.value = store.get("speak-sens") ?? "1";
+  sens.addEventListener("change", () => store.set("speak-sens", sens.value));
+}
+
+function engines() {
+  return { stt: $("set-stt").value, model: $("set-model").value, translator: $("set-translator").value };
+}
+
+function payload(mode) {
+  if (mode === "speak") {
+    return {
+      mode, ...engines(),
+      source: $("speak-source").value, target: $("speak-target").value, voice: $("speak-voice").value,
+      input_device: $("speak-input").value, output_device: $("speak-output").value, speak: true,
+      monitor: $("speak-monitor").checked, monitor_device: $("speak-monitor-device").value,
+      sensitivity: Number($("speak-sens").value),
+    };
+  }
+  return {
+    mode, ...engines(),
+    source: $("listen-source").value, target: $("listen-target").value, voice: $("listen-voice").value,
+    input_device: $("listen-input").value, output_device: $("listen-output").value,
+    speak: $("listen-speak").checked, sensitivity: 1,
+  };
+}
+
+const LABEL = { starting: "Starting…", listening: "Listening", stopped: "Stopped", error: "Error", idle: "Stopped" };
+
+function showState(mode, info) {
+  const state = info?.state ?? "stopped";
+  const running = info?.running ?? false;
+  states[mode] = running ? state : (state === "error" ? "error" : "stopped");
+  const el = $(mode + "-state");
+  el.textContent = LABEL[states[mode]] ?? states[mode];
+  el.className = "state " + states[mode];
+  const btn = document.querySelector(`[data-start="${mode}"]`);
+  if (!btn.disabled) {
+    btn.textContent = running ? "Stop" : "Start";
+    btn.classList.toggle("stop", running);
+  }
+  const level = info?.level ?? 0;
+  const db = level > 0 ? 20 * Math.log10(level) : -90;
+  $(mode + "-level").value = Math.max(0, Math.min(1, (db + 60) / 60));
+}
+
+const TAG = { speak: "You →", listen: "Them →", test: "Test →" };
+
+function addEvent(ev) {
+  if (ev.kind === "state") return;
+  const log = $("log");
+  const li = document.createElement("li");
+  li.className = ev.kind;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const tag = document.createElement("span");
+  tag.className = "tag";
+  tag.textContent = TAG[ev.mode] ?? ev.mode;
+  const time = document.createElement("span");
+  time.textContent = new Date(ev.time * 1000).toLocaleTimeString();
+  meta.append(tag, time);
+  if (ev.kind === "line") {
+    const info = document.createElement("span");
+    info.textContent = `${ev.source} → ${ev.target}` + (ev.seconds ? ` · ${ev.seconds}s` : "") + (ev.engine ? ` · ${ev.engine}` : "");
+    meta.append(info);
+  }
+  const main = document.createElement("div");
+  main.className = "main";
+  main.textContent = ev.text;
+  li.append(meta, main);
+  if (ev.kind === "line" && ev.original && ev.original !== ev.text) {
+    const orig = document.createElement("div");
+    orig.className = "orig";
+    orig.textContent = ev.original;
+    li.append(orig);
+  }
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.append(li);
+  while (log.children.length > 300) log.firstElementChild.remove();
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+async function poll() {
+  try {
+    const data = await api(`/api/state?since=${lastEvent}`);
+    for (const ev of data.events) { addEvent(ev); lastEvent = ev.id; }
+    for (const mode of ["speak", "listen"]) showState(mode, data.pipelines[mode]);
+  } catch (err) {
+    for (const mode of ["speak", "listen"]) $(mode + "-state").textContent = "Disconnected";
+  }
+  setTimeout(poll, 300);
+}
+
+for (const btn of document.querySelectorAll("[data-start]")) {
+  btn.addEventListener("click", async () => {
+    const mode = btn.dataset.start;
+    const running = btn.classList.contains("stop");
+    btn.disabled = true;
+    try {
+      if (running) await api("/api/stop", { mode });
+      else await api("/api/start", payload(mode));
+    } catch (err) {
+      addEvent({ kind: "error", mode, time: Date.now() / 1000, text: err.message });
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+$("test-go").addEventListener("click", async () => {
+  try {
+    await api("/api/say", {
+      text: $("test-text").value, source: $("test-source").value, target: $("test-target").value,
+      output_device: $("test-output").value, voice: "female", translator: $("set-translator").value,
+    });
+  } catch (err) {
+    addEvent({ kind: "error", mode: "test", time: Date.now() / 1000, text: err.message });
+  }
+});
+
+$("clear-log").addEventListener("click", () => $("log").replaceChildren());
+
+(async () => {
+  try {
+    config = await api("/api/config");
+    setup();
+  } catch (err) {
+    addEvent({ kind: "error", mode: "app", time: Date.now() / 1000, text: "Could not load devices: " + err.message });
+  }
+  poll();
+})();
+</script>
+</body>
+</html>

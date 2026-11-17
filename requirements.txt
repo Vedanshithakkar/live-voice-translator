@@ -1,0 +1,8 @@
+numpy>=1.24
+soundcard>=0.4.3          # microphones, speakers and loopback capture (WASAPI / PulseAudio / CoreAudio)
+edge-tts>=6.1             # natural neural voices (Microsoft Edge read-aloud voices)
+av>=11                    # decodes the voice audio (FFmpeg)
+requests>=2.28
+deep-translator>=1.11     # free Google Translate
+SpeechRecognition>=3.11   # Google speech recognition (online fallback)
+faster-whisper>=1.0       # local, private speech recognition (preferred when it can load)
